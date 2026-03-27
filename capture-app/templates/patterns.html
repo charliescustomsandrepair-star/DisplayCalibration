@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calibration Pattern Display</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        canvas#patternCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #statusOverlay {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 8px 14px;
+            border-radius: 6px;
+            z-index: 100;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        #statusOverlay.hidden { opacity: 0; }
+        #waitingScreen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #111;
+            color: #fff;
+            font-family: system-ui, sans-serif;
+            z-index: 200;
+        }
+        #waitingScreen h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+        #waitingScreen p { font-size: 1.2rem; color: #aaa; max-width: 500px; text-align: center; }
+        #waitingScreen.hidden { display: none; }
+        .pulse { animation: pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <!-- Waiting screen shown before capture starts -->
+    <div id="waitingScreen">
+        <h1>📺 Pattern Display Ready</h1>
+        <p>This screen will display calibration fringe patterns.</p>
+        <p style="margin-top: 1rem;" class="pulse">Waiting for phone to connect and start capture...</p>
+        <p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">
+            Make this window fullscreen (F11) for best results.
+        </p>
+    </div>
+
+    <!-- Pattern canvas (fullscreen) -->
+    <canvas id="patternCanvas"></canvas>
+
+    <!-- Status overlay (auto-hides during capture) -->
+    <div id="statusOverlay">
+        <span id="statusText">Idle</span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <script>
+    (function() {
+        const canvas = document.getElementById('patternCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('statusText');
+        const statusOverlay = document.getElementById('statusOverlay');
+        const waitingScreen = document.getElementById('waitingScreen');
+
+        const SEQUENCE = {{ sequence | safe }};
+        const SETTLING_TIME = {{ settling_time }};
+
+        let currentIndex = -1;
+        let isCapturing = false;
+
+        // Resize canvas to actual pixel dimensions
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            if (currentIndex >= 0) {
+                drawPattern(SEQUENCE[currentIndex].frequency, SEQUENCE[currentIndex].phase);
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        /**
+         * Draw a sinusoidal fringe pattern on the canvas.
+         * @param {number} freq - Cycles across the screen width
+         * @param {number} phase - Phase offset in radians
+         */
+        function drawPattern(freq, phase) {
+            const w = canvas.width;
+            const h = canvas.height;
+            const imgData = ctx.createImageData(w, h);
+            const data = imgData.data;
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    // Normalized position
+                    const nx = x / w;
+                    // Sinusoidal intensity: 0.5 + 0.5 * sin(2π * freq * x/w + phase)
+                    const value = Math.round(255 * (0.5 + 0.5 * Math.sin(2 * Math.PI * freq * nx + phase)));
+                    const idx = (y * w + x) * 4;
+                    data[idx]     = value; // R
+                    data[idx + 1] = value; // G
+                    data[idx + 2] = value; // B
+                    data[idx + 3] = 255;   // A
+                }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        // --- WebSocket connection ---
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('Pattern display connected to server');
+            statusEl.textContent = 'Connected — waiting for capture start';
+            socket.emit('join_role', { role: 'pattern' });
+        });
+
+        socket.on('show_pattern', (data) => {
+            waitingScreen.classList.add('hidden');
+            isCapturing = true;
+            currentIndex = data.index;
+
+            // Draw the requested pattern
+            drawPattern(data.frequency, data.phase);
+
+            statusEl.textContent = `Pattern ${data.index + 1}/${SEQUENCE.length}: ${data.label}`;
+
+            // Hide status overlay after a moment so it doesn't interfere with capture
+            setTimeout(() => {
+                statusOverlay.classList.add('hidden');
+            }, 200);
+
+            // Signal server that pattern is displayed and settled
+            setTimeout(() => {
+                socket.emit('pattern_settled', { index: data.index });
+            }, data.settling_time || SETTLING_TIME);
+        });
+
+        socket.on('capture_complete', (data) => {
+            isCapturing = false;
+            currentIndex = -1;
+            // Show completion message
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#0f0';
+            ctx.font = `${Math.round(canvas.height * 0.05)}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.fillText('✓ Calibration Capture Complete', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.fillStyle = '#888';
+            ctx.font = `${Math.round(canvas.height * 0.025)}px system-ui`;
+            ctx.fillText(`${data.total} images captured in ${data.elapsed}s`, canvas.width / 2, canvas.height / 2 + 30);
+
+            statusOverlay.classList.remove('hidden');
+            statusEl.textContent = 'Complete';
+        });
+
+        socket.on('capture_aborted', () => {
+            isCapturing = false;
+            waitingScreen.classList.remove('hidden');
+            statusOverlay.classList.remove('hidden');
+            statusEl.textContent = 'Aborted — waiting for restart';
+        });
+
+        socket.on('disconnect', () => {
+            statusOverlay.classList.remove('hidden');
+            statusEl.textContent = 'Disconnected';
+        });
+
+        // Fullscreen on click
+        document.body.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+        });
+
+        // ESC to exit
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isCapturing) {
+                socket.emit('abort_capture');
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

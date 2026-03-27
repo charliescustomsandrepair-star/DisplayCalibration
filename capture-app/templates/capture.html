@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Display Calibration Capture</title>
+    <style>
+        :root {
+            --accent: #00c8ff;
+            --accent-dim: #006680;
+            --bg: #0a0a0a;
+            --card: #1a1a1a;
+            --text: #e8e8e8;
+            --dim: #888;
+            --success: #00e676;
+            --warn: #ffab00;
+            --danger: #ff5252;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%; height: 100%;
+            background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden; touch-action: manipulation;
+        }
+
+        /* ----- SETUP SCREEN ----- */
+        #setupScreen {
+            position: fixed; inset: 0; z-index: 100;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 24px; text-align: center;
+        }
+        #setupScreen.hidden { display: none; }
+        #setupScreen h1 { font-size: 1.6rem; margin-bottom: 8px; }
+        #setupScreen .subtitle { color: var(--dim); font-size: 0.95rem; margin-bottom: 24px; }
+        .instruction-list {
+            text-align: left; max-width: 380px; width: 100%;
+            margin-bottom: 28px;
+        }
+        .instruction-list li {
+            display: flex; align-items: flex-start; gap: 10px;
+            margin-bottom: 14px; font-size: 0.92rem; line-height: 1.4;
+        }
+        .instruction-list .num {
+            flex-shrink: 0; width: 26px; height: 26px;
+            background: var(--accent-dim); color: #fff;
+            border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-weight: 700; font-size: 0.8rem;
+        }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 14px 40px; border: none; border-radius: 12px;
+            font-size: 1.1rem; font-weight: 600; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-primary:active { transform: scale(0.96); }
+        .btn-primary:disabled { background: #333; color: #666; cursor: not-allowed; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-sm { padding: 8px 20px; font-size: 0.9rem; border-radius: 8px; }
+
+        /* ----- CAMERA VIEW ----- */
+        #cameraScreen { position: fixed; inset: 0; display: none; }
+        #cameraScreen.active { display: block; }
+        #videoPreview {
+            width: 100%; height: 100%;
+            object-fit: cover; background: #000;
+        }
+
+        /* 95% guide overlay */
+        #guideOverlay {
+            position: fixed; inset: 0; z-index: 10;
+            pointer-events: none;
+        }
+        #guideOverlay .border-guide {
+            position: absolute;
+            top: 2.5%; left: 2.5%; right: 2.5%; bottom: 2.5%;
+            border: 2px solid rgba(0, 200, 255, 0.6);
+            border-radius: 4px;
+        }
+        #guideOverlay .corner {
+            position: absolute; width: 20px; height: 20px;
+            border-color: var(--accent); border-style: solid; border-width: 0;
+        }
+        #guideOverlay .corner.tl { top: 2.5%; left: 2.5%; border-top-width: 3px; border-left-width: 3px; }
+        #guideOverlay .corner.tr { top: 2.5%; right: 2.5%; border-top-width: 3px; border-right-width: 3px; }
+        #guideOverlay .corner.bl { bottom: 2.5%; left: 2.5%; border-bottom-width: 3px; border-left-width: 3px; }
+        #guideOverlay .corner.br { bottom: 2.5%; right: 2.5%; border-bottom-width: 3px; border-right-width: 3px; }
+        .guide-label {
+            position: absolute; top: calc(2.5% - 22px); left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,200,255,0.15); color: var(--accent);
+            padding: 2px 10px; border-radius: 4px;
+            font-size: 0.7rem; font-weight: 600; letter-spacing: 0.5px;
+        }
+
+        /* ----- HUD (heads-up display over camera) ----- */
+        #hud {
+            position: fixed; top: 0; left: 0; right: 0;
+            z-index: 20; padding: 12px 16px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+        }
+        #hud .status-row {
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        #hud .status-text { font-size: 0.85rem; font-weight: 600; }
+        #hud .capture-count { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+
+        /* Progress bar */
+        .progress-bar {
+            margin-top: 8px; height: 4px;
+            background: rgba(255,255,255,0.15); border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-bar .fill {
+            height: 100%; background: var(--accent);
+            border-radius: 2px; transition: width 0.4s ease;
+        }
+
+        /* Camera settings display */
+        #cameraInfo {
+            position: fixed; bottom: 80px; left: 0; right: 0;
+            z-index: 20; text-align: center;
+            font-size: 0.7rem; color: var(--dim);
+        }
+        #cameraInfo .locked { color: var(--success); }
+        #cameraInfo .unlocked { color: var(--warn); }
+
+        /* Bottom controls */
+        #bottomBar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            z-index: 20; padding: 16px 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            display: flex; align-items: center; justify-content: center; gap: 16px;
+        }
+
+        /* Capture indicator (pulsing ring during auto-capture) */
+        .capture-ring {
+            width: 64px; height: 64px; border-radius: 50%;
+            border: 3px solid #fff; display: flex;
+            align-items: center; justify-content: center;
+            position: relative;
+        }
+        .capture-ring .inner {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: #fff; transition: all 0.2s;
+        }
+        .capture-ring.capturing .inner {
+            background: var(--danger);
+            animation: pulse-ring 0.8s ease-in-out infinite;
+        }
+        .capture-ring.settling .inner { background: var(--warn); }
+        .capture-ring.done .inner { background: var(--success); }
+        @keyframes pulse-ring { 0%,100% { transform: scale(1); } 50% { transform: scale(0.85); } }
+
+        /* ----- RESULT SCREEN ----- */
+        #resultScreen {
+            position: fixed; inset: 0; z-index: 200;
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: var(--bg); padding: 24px; text-align: center;
+        }
+        #resultScreen.active { display: flex; }
+        .result-icon { font-size: 4rem; margin-bottom: 16px; }
+        .result-stats {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 12px; margin: 20px 0; max-width: 300px; width: 100%;
+        }
+        .stat-card {
+            background: var(--card); padding: 12px;
+            border-radius: 8px; text-align: center;
+        }
+        .stat-card .val { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+        .stat-card .label { font-size: 0.75rem; color: var(--dim); margin-top: 4px; }
+
+        /* ----- AMBIENT LIGHT INDICATOR ----- */
+        .ambient-indicator {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.75rem; padding: 4px 8px;
+            background: rgba(0,0,0,0.4); border-radius: 4px;
+        }
+        .ambient-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+        }
+        .ambient-dot.good { background: var(--success); }
+        .ambient-dot.warn { background: var(--warn); }
+        .ambient-dot.bad { background: var(--danger); }
+    </style>
+</head>
+<body>
+    <!-- ==================== SETUP SCREEN ==================== -->
+    <div id="setupScreen">
+        <h1>Display Calibration</h1>
+        <p class="subtitle">Automated Subpixel Capture Tool</p>
+
+        <ol class="instruction-list">
+            <li>
+                <span class="num">1</span>
+                <span>Open the <strong>pattern display</strong> page fullscreen on your computer monitor.</span>
+            </li>
+            <li>
+                <span class="num">2</span>
+                <span>Position this phone so the <strong>monitor fills 95%</strong> of the camera view. Use the blue guide frame.</span>
+            </li>
+            <li>
+                <span class="num">3</span>
+                <span><strong>Prop or mount</strong> the phone securely to prevent any movement during capture.</span>
+            </li>
+            <li>
+                <span class="num">4</span>
+                <span>Reduce ambient light — <strong>dim room lighting</strong> for best results.</span>
+            </li>
+            <li>
+                <span class="num">5</span>
+                <span>Press <strong>Start</strong>. The app will automatically capture all <strong>{{ total }}</strong> images with locked camera settings.</span>
+            </li>
+        </ol>
+
+        <div id="connectionStatus" style="margin-bottom: 16px; font-size: 0.85rem;">
+            <span style="color: var(--warn);">⏳ Connecting to server...</span>
+        </div>
+
+        <button id="btnOpenCamera" class="btn btn-primary" disabled>Open Camera Preview</button>
+    </div>
+
+    <!-- ==================== CAMERA SCREEN ==================== -->
+    <div id="cameraScreen">
+        <video id="videoPreview" autoplay playsinline muted></video>
+
+        <!-- 95% guide overlay -->
+        <div id="guideOverlay">
+            <div class="border-guide"></div>
+            <div class="corner tl"></div>
+            <div class="corner tr"></div>
+            <div class="corner bl"></div>
+            <div class="corner br"></div>
+            <span class="guide-label">FILL 95% — ALIGN DISPLAY EDGES</span>
+        </div>
+
+        <!-- HUD -->
+        <div id="hud">
+            <div class="status-row">
+                <div>
+                    <div id="hudStatus" class="status-text">Position your phone</div>
+                    <div id="hudDetail" style="font-size: 0.75rem; color: var(--dim); margin-top: 2px;"></div>
+                </div>
+                <div id="hudCount" class="capture-count" style="display:none;">0/{{ total }}</div>
+            </div>
+            <div class="progress-bar" id="progressBar" style="display:none;">
+                <div class="fill" id="progressFill" style="width:0%"></div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+                <div id="ambientIndicator" class="ambient-indicator">
+                    <div class="ambient-dot good"></div>
+                    <span>Ambient: checking...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera settings info -->
+        <div id="cameraInfo">
+            <span id="lockStatus">Camera: initializing...</span>
+        </div>
+
+        <!-- Bottom bar -->
+        <div id="bottomBar">
+            <button id="btnAbort" class="btn btn-danger btn-sm" style="display:none;" onclick="abortCapture()">
+                ✕ Abort
+            </button>
+            <div id="captureRing" class="capture-ring" style="display:none;">
+                <div class="inner"></div>
+            </div>
+            <button id="btnStart" class="btn btn-primary" onclick="startCapture()">
+                ▶ Start Capture
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================== RESULT SCREEN ==================== -->
+    <div id="resultScreen">
+        <div class="result-icon">✅</div>
+        <h2>Calibration Capture Complete</h2>
+        <div class="result-stats">
+            <div class="stat-card">
+                <div class="val" id="resultTotal">0</div>
+                <div class="label">Images Captured</div>
+            </div>
+            <div class="stat-card">
+                <div class="val" id="resultTime">0s</div>
+                <div class="label">Total Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="val" id="resultConfidence">0%</div>
+                <div class="label">Avg Edge Confidence</div>
+            </div>
+            <div class="stat-card">
+                <div class="val" id="resultResolution">-</div>
+                <div class="label">Cropped Resolution</div>
+            </div>
+        </div>
+        <p id="resultTokenLine" style="color: var(--accent); font-size: 0.85rem; margin: 8px 0;"></p>
+        <p style="color: var(--dim); font-size: 0.85rem; margin: 12px 0 24px;">
+            Images have been uploaded and processed.<br>
+            Calibration token is saved for the perceptual rendering engine.
+        </p>
+        <button class="btn btn-primary" onclick="location.reload()">New Capture Session</button>
+    </div>
+
+    <!-- Hidden canvas for image capture -->
+    <canvas id="captureCanvas" style="display:none;"></canvas>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <script>
+    (function() {
+        // ===== CONFIGURATION =====
+        const TOTAL_CAPTURES = {{ total }};
+        const CAMERA_DEFAULTS = {{ camera_defaults | safe }};
+        const SETTLING_TIME = {{ settling_time }};
+        const INTER_CAPTURE_DELAY = 200; // ms extra delay after settling
+
+        // ===== DOM ELEMENTS =====
+        const setupScreen = document.getElementById('setupScreen');
+        const cameraScreen = document.getElementById('cameraScreen');
+        const resultScreen = document.getElementById('resultScreen');
+        const video = document.getElementById('videoPreview');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const captureCtx = captureCanvas.getContext('2d');
+        const btnOpenCamera = document.getElementById('btnOpenCamera');
+        const btnStart = document.getElementById('btnStart');
+        const btnAbort = document.getElementById('btnAbort');
+        const captureRing = document.getElementById('captureRing');
+        const hudStatus = document.getElementById('hudStatus');
+        const hudDetail = document.getElementById('hudDetail');
+        const hudCount = document.getElementById('hudCount');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const lockStatus = document.getElementById('lockStatus');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const ambientIndicator = document.getElementById('ambientIndicator');
+
+        // ===== STATE =====
+        let stream = null;
+        let track = null;
+        let capabilities = {};
+        let isCapturing = false;
+        let captureResults = [];
+        let connected = false;
+
+        // ===== SOCKET CONNECTION =====
+        const socket = io();
+
+        socket.on('connect', () => {
+            connected = true;
+            connectionStatus.innerHTML = '<span style="color: var(--success);">✓ Connected to server</span>';
+            btnOpenCamera.disabled = false;
+            socket.emit('join_role', { role: 'capture' });
+        });
+
+        socket.on('disconnect', () => {
+            connected = false;
+            connectionStatus.innerHTML = '<span style="color: var(--danger);">✕ Disconnected</span>';
+        });
+
+        socket.on('capture_started', (data) => {
+            hudStatus.textContent = 'Capture started — hold still!';
+            hudDetail.textContent = data.first_pattern.label;
+        });
+
+        socket.on('capture_confirmed', (data) => {
+            captureResults.push(data);
+            const conf = data.edge_info.confidence;
+            hudDetail.textContent = `Edge confidence: ${(conf * 100).toFixed(1)}%`;
+        });
+
+        socket.on('ready_for_capture', (data) => {
+            if (!isCapturing || data.index === undefined || data.index === null) return;
+            hudStatus.textContent = `Ready — ${data.pattern ? data.pattern.label : 'pattern ' + (data.index + 1)}`;
+            captureRing.className = 'capture-ring settling';
+            const extra = (data.settling_time || 0) + (data.fallback ? 0 : INTER_CAPTURE_DELAY);
+            setTimeout(() => captureImage(data.index), extra);
+        });
+
+        socket.on('capture_complete', (data) => {
+            isCapturing = false;
+            showResults(data);
+        });
+
+        socket.on('calibration_ready', (data) => {
+            if (data && data.path) {
+                hudDetail.textContent = `Token: ${data.layout || 'OK'} → ${data.path}`;
+            }
+        });
+
+        socket.on('capture_aborted', () => {
+            isCapturing = false;
+            hudStatus.textContent = 'Capture aborted';
+            captureRing.className = 'capture-ring';
+            btnStart.style.display = '';
+            btnAbort.style.display = 'none';
+            captureRing.style.display = 'none';
+        });
+
+        socket.on('error', (data) => {
+            hudStatus.textContent = `Error: ${data.message}`;
+            hudStatus.style.color = 'var(--danger)';
+        });
+
+        // ===== CAMERA SETUP =====
+        btnOpenCamera.addEventListener('click', openCamera);
+
+        async function openCamera() {
+            try {
+                // Request high-res rear camera
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 3840 },
+                        height: { ideal: 2160 },
+                        frameRate: { ideal: 30 },
+                    },
+                    audio: false,
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                track = stream.getVideoTracks()[0];
+                video.srcObject = stream;
+
+                await new Promise(r => video.addEventListener('loadedmetadata', r, { once: true }));
+
+                // Read capabilities
+                capabilities = track.getCapabilities ? track.getCapabilities() : {};
+                console.log('Camera capabilities:', capabilities);
+
+                // Set initial canvas size to match video
+                captureCanvas.width = track.getSettings().width || video.videoWidth;
+                captureCanvas.height = track.getSettings().height || video.videoHeight;
+
+                // Lock camera settings for consistency
+                await lockCameraSettings();
+
+                // Switch to camera view
+                setupScreen.classList.add('hidden');
+                cameraScreen.classList.add('active');
+
+                // Start ambient light monitoring
+                monitorAmbientLight();
+
+            } catch (err) {
+                alert('Camera access denied or unavailable.\n\n' + err.message);
+                console.error('Camera error:', err);
+            }
+        }
+
+        async function lockCameraSettings() {
+            if (!track || !track.applyConstraints) {
+                lockStatus.innerHTML = '<span class="unlocked">⚠ Camera locking unavailable</span>';
+                return;
+            }
+
+            const advanced = {};
+            const locked = [];
+            const unlocked = [];
+
+            // Focus lock
+            if (capabilities.focusMode && capabilities.focusMode.includes('manual')) {
+                advanced.focusMode = 'manual';
+                if (capabilities.focusDistance) {
+                    advanced.focusDistance = CAMERA_DEFAULTS.focusDistance;
+                }
+                locked.push('Focus');
+            } else {
+                // Try continuous — better than nothing
+                if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                    advanced.focusMode = 'continuous';
+                }
+                unlocked.push('Focus');
+            }
+
+            // Exposure lock
+            if (capabilities.exposureMode && capabilities.exposureMode.includes('manual')) {
+                advanced.exposureMode = 'manual';
+                if (capabilities.exposureTime) {
+                    advanced.exposureTime = Math.min(
+                        capabilities.exposureTime.max,
+                        Math.max(capabilities.exposureTime.min, CAMERA_DEFAULTS.exposureTime)
+                    );
+                }
+                if (capabilities.iso) {
+                    advanced.iso = Math.min(
+                        capabilities.iso.max,
+                        Math.max(capabilities.iso.min, CAMERA_DEFAULTS.iso)
+                    );
+                }
+                locked.push('Exposure');
+            } else {
+                unlocked.push('Exposure');
+            }
+
+            // White balance lock
+            if (capabilities.whiteBalanceMode && capabilities.whiteBalanceMode.includes('manual')) {
+                advanced.whiteBalanceMode = 'manual';
+                if (capabilities.colorTemperature) {
+                    advanced.colorTemperature = Math.min(
+                        capabilities.colorTemperature.max,
+                        Math.max(capabilities.colorTemperature.min, CAMERA_DEFAULTS.whiteBalance)
+                    );
+                }
+                locked.push('WB');
+            } else {
+                unlocked.push('WB');
+            }
+
+            // Apply constraints
+            try {
+                await track.applyConstraints({ advanced: [advanced] });
+            } catch (e) {
+                console.warn('Some camera constraints could not be applied:', e);
+            }
+
+            // Update UI
+            let html = '';
+            if (locked.length) {
+                html += `<span class="locked">🔒 ${locked.join(', ')}</span>`;
+            }
+            if (unlocked.length) {
+                html += ` <span class="unlocked">⚠ ${unlocked.join(', ')} (auto)</span>`;
+            }
+            lockStatus.innerHTML = html || 'Camera ready';
+        }
+
+        function monitorAmbientLight() {
+            // Use the video feed brightness as ambient light proxy
+            const checkInterval = setInterval(() => {
+                if (!stream || !stream.active) { clearInterval(checkInterval); return; }
+
+                // Sample a small region of the video
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 64;
+                tempCanvas.height = 64;
+                const tctx = tempCanvas.getContext('2d');
+                tctx.drawImage(video, 0, 0, 64, 64);
+                const pixels = tctx.getImageData(0, 0, 64, 64).data;
+
+                // Average brightness
+                let sum = 0;
+                for (let i = 0; i < pixels.length; i += 4) {
+                    sum += pixels[i] * 0.2126 + pixels[i+1] * 0.7152 + pixels[i+2] * 0.0722;
+                }
+                const avgBrightness = sum / (64 * 64);
+
+                const dot = ambientIndicator.querySelector('.ambient-dot');
+                const label = ambientIndicator.querySelector('span');
+                if (avgBrightness < 30) {
+                    dot.className = 'ambient-dot good';
+                    label.textContent = 'Ambient: Low (ideal)';
+                } else if (avgBrightness < 80) {
+                    dot.className = 'ambient-dot warn';
+                    label.textContent = 'Ambient: Moderate';
+                } else {
+                    dot.className = 'ambient-dot bad';
+                    label.textContent = 'Ambient: Too bright — dim lights!';
+                }
+            }, 2000);
+        }
+
+        // ===== CAPTURE SEQUENCE =====
+        window.startCapture = function() {
+            if (!connected) {
+                hudStatus.textContent = 'Not connected to server!';
+                return;
+            }
+
+            isCapturing = true;
+            captureResults = [];
+
+            // UI changes
+            btnStart.style.display = 'none';
+            btnAbort.style.display = '';
+            captureRing.style.display = '';
+            hudCount.style.display = '';
+            progressBar.style.display = '';
+            captureRing.className = 'capture-ring settling';
+
+            hudStatus.textContent = 'Starting capture sequence...';
+            hudCount.textContent = `0/${TOTAL_CAPTURES}`;
+
+            // Re-lock camera settings right before capture
+            lockCameraSettings().then(() => {
+                hudStatus.textContent = 'Waiting for fullscreen pattern sync…';
+                socket.emit('start_capture');
+            });
+        };
+
+        function captureImage(index) {
+            if (!isCapturing) return;
+
+            captureRing.className = 'capture-ring capturing';
+            hudStatus.textContent = `Capturing ${index + 1}/${TOTAL_CAPTURES}...`;
+            hudCount.textContent = `${index + 1}/${TOTAL_CAPTURES}`;
+            progressFill.style.width = `${((index + 1) / TOTAL_CAPTURES) * 100}%`;
+
+            // Draw video frame to canvas at full resolution
+            captureCanvas.width = track.getSettings().width || video.videoWidth;
+            captureCanvas.height = track.getSettings().height || video.videoHeight;
+            captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+            // Convert to high-quality PNG
+            const dataUrl = captureCanvas.toDataURL('image/png', 1.0);
+
+            // Upload to server
+            socket.emit('image_captured', {
+                image: dataUrl,
+                index: index,
+                timestamp: Date.now(),
+                camera_settings: track.getSettings ? track.getSettings() : {},
+            });
+
+            captureRing.className = 'capture-ring settling';
+            hudStatus.textContent = `Uploaded ${index + 1}/${TOTAL_CAPTURES} — waiting for next pattern...`;
+        }
+
+        window.abortCapture = function() {
+            isCapturing = false;
+            socket.emit('abort_capture');
+        };
+
+        function showResults(data) {
+            // Stop camera
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+            }
+
+            cameraScreen.classList.remove('active');
+            resultScreen.classList.add('active');
+
+            document.getElementById('resultTotal').textContent = data.total;
+            document.getElementById('resultTime').textContent = `${data.elapsed}s`;
+            const tokenLine = document.getElementById('resultTokenLine');
+            if (tokenLine) {
+                if (data.calibration_path) {
+                    const base = window.location.origin || '';
+                    tokenLine.innerHTML = `Renderer token: <a href="${base}/api/calibration-token" style="color:var(--accent);">/api/calibration-token</a><br><span style="color:var(--dim);font-size:0.8rem;">${data.calibration_path}</span>`;
+                } else {
+                    tokenLine.textContent = '';
+                }
+            }
+
+            // Calculate average confidence
+            if (captureResults.length > 0) {
+                const avgConf = captureResults.reduce((s, r) => s + (r.edge_info?.confidence || 0), 0) / captureResults.length;
+                document.getElementById('resultConfidence').textContent = `${(avgConf * 100).toFixed(1)}%`;
+
+                const lastCrop = captureResults[captureResults.length - 1].cropped_size;
+                if (lastCrop) {
+                    document.getElementById('resultResolution').textContent = `${lastCrop.w}×${lastCrop.h}`;
+                }
+            }
+        }
+    })();
+    </script>
+</body>
+</html>

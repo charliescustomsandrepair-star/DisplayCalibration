@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DisplayCalibration — Capture Server</title>
+    <style>
+        :root { --accent: #00c8ff; --bg: #0e1117; --card: #1a1e2a; --text: #e0e0e0; --dim: #777; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh; background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 40px 20px;
+        }
+        h1 { font-size: 2rem; margin-bottom: 4px; }
+        .subtitle { color: var(--dim); margin-bottom: 32px; }
+        .card {
+            background: var(--card); border-radius: 16px;
+            padding: 32px; max-width: 480px; width: 100%;
+            text-align: center; margin-bottom: 24px;
+        }
+        .qr-container { margin: 20px 0; }
+        .qr-container img { border-radius: 8px; background: #fff; padding: 8px; }
+        .url-box {
+            background: #111; border: 1px solid #333;
+            border-radius: 8px; padding: 10px 16px;
+            font-family: 'Courier New', monospace; font-size: 0.9rem;
+            word-break: break-all; color: var(--accent);
+            margin: 12px 0;
+        }
+        .step {
+            display: flex; align-items: flex-start; gap: 12px;
+            text-align: left; margin-bottom: 14px;
+        }
+        .step-num {
+            flex-shrink: 0; width: 28px; height: 28px;
+            background: var(--accent); color: #000; font-weight: 700;
+            border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 0.85rem;
+        }
+        .step p { font-size: 0.92rem; line-height: 1.45; }
+        .step strong { color: #fff; }
+        a.btn {
+            display: inline-block; padding: 12px 32px;
+            background: var(--accent); color: #000;
+            text-decoration: none; border-radius: 10px;
+            font-weight: 600; font-size: 1rem;
+            margin-top: 8px; transition: transform 0.15s;
+        }
+        a.btn:hover { transform: scale(1.03); }
+        .footer { color: var(--dim); font-size: 0.8rem; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Display Calibration</h1>
+    <p class="subtitle">Automated Subpixel Capture Server</p>
+
+    <!-- QR Code Card -->
+    <div class="card">
+        <h2 style="font-size: 1.2rem; margin-bottom: 4px;">📱 Phone Capture App</h2>
+        <p style="color: var(--dim); font-size: 0.85rem;">Scan this QR code on your phone (same Wi-Fi network)</p>
+        <div class="qr-container">
+            <img src="{{ qr_data }}" alt="QR Code" width="180" height="180">
+        </div>
+        <div class="url-box">{{ capture_url }}</div>
+        <p style="font-size: 0.8rem; color: var(--dim);">Or type the URL manually in your phone's browser</p>
+    </div>
+
+    <!-- Instructions Card -->
+    <div class="card">
+        <h2 style="font-size: 1.1rem; margin-bottom: 16px;">Quick Setup</h2>
+        <div class="step">
+            <span class="step-num">1</span>
+            <p>Click below to open the <strong>pattern display</strong> and make it fullscreen (F11).</p>
+        </div>
+        <div class="step">
+            <span class="step-num">2</span>
+            <p>Scan the QR code above with your phone (both devices on the <strong>same Wi-Fi</strong>).</p>
+        </div>
+        <div class="step">
+            <span class="step-num">3</span>
+            <p>On your phone, <strong>frame the monitor</strong> at 95% of the camera view, then prop/mount the phone securely.</p>
+        </div>
+        <div class="step">
+            <span class="step-num">4</span>
+            <p>Press <strong>Start</strong> on your phone. All 15 captures happen automatically.</p>
+        </div>
+
+        <a class="btn" href="/patterns" target="_blank">Open Pattern Display ↗</a>
+    </div>
+
+    <p class="footer">Server: {{ ip }}:{{ port }} &nbsp;|&nbsp; Captures: 15 (3 freq × 5 phase shifts)</p>
+</body>
+</html>
