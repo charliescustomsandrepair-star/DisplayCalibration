@@ -5,14 +5,11 @@ on:
     tags:
       - 'v*'
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Install vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
@@ -33,7 +30,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Install dependencies
         run: brew install opencv glew glfw3 cmake ninja
       - name: Build
@@ -50,7 +47,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Install dependencies
         run: |
           sudo apt-get update
