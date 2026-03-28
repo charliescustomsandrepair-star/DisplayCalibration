@@ -9,7 +9,13 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Setup vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
 
       - name: Install vcpkg
         run: |
@@ -17,38 +23,31 @@ jobs:
           C:\vcpkg\bootstrap-vcpkg.bat
 
       - name: Install dependencies
-        run: C:\vcpkg\vcpkg install opencv:x64-windows glew:x64-windows glfw3:x64-windows
+        run: C:\vcpkg\vcpkg install opencv glew glfw3 --triplet x64-windows
 
       - name: Build
         run: |
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DUSE_OPENCV=ON -DBUILD_DEMO=ON -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake -G "Visual Studio 17 2022" ..
-          cmake --build . --config Release
+          cmake --preset demo-vcpkg -DCMAKE_BUILD_TYPE=Release
+          cmake --build --preset demo-vcpkg --config Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: demo-windows
-          path: build/Release/demo.exe
+          path: build/demo-vcpkg/Release/demo.exe
 
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: brew install opencv glew glfw cmake ninja
+        run: brew install opencv glew glfw cmake ninja pkg-config
 
       - name: Build
         run: |
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release \
-                -DUSE_OPENCV=ON \
-                -DBUILD_DEMO=ON \
-                -G Ninja ..
-          cmake --build .
+          cmake --preset demo -DCMAKE_BUILD_TYPE=Release
+          cmake --build --preset demo
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -59,7 +58,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -68,20 +67,15 @@ jobs:
             libopencv-dev \
             libglew-dev \
             libglfw3-dev \
+            libgl1-mesa-dev \
             cmake \
-            ninja-build
+            ninja-build \
+            pkg-config
 
       - name: Build
         run: |
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release \
-                -DUSE_OPENCV=ON \
-                -DBUILD_DEMO=ON \
-                -DGLEW_INCLUDE_DIR=/usr/include \
-                -DGLEW_LIBRARY=/usr/lib/x86_64-linux-gnu/libGLEW.so \
-                -G Ninja ..
-          cmake --build .
+          cmake --preset demo -DCMAKE_BUILD_TYPE=Release
+          cmake --build --preset demo
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -97,7 +91,7 @@ jobs:
       - uses: actions/download-artifact@v4
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             demo-windows/demo.exe
