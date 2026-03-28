@@ -112,6 +112,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+
             artifacts/demo-macos/demo
             artifacts/demo-linux/demo
         env:
