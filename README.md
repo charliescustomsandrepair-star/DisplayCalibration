@@ -1,26 +1,31 @@
 #1 DisplayCalibration
 
-**How to run:** use **§2** below.  
 
+--
+## Quick Start (Easiest Way)
 
+### 1. Download Pre-built Demo
+Go to the [Releases page] and download the latest version for your platform:
 
-## 2. Run calibration (phone + PC)
+- `demo-windows.zip` → `demo.exe`
+- `demo-macos.zip` → `demo` (make executable with `chmod +x demo`)
+- `demo-linux.zip` → `demo`
 
-```powershell
-cd C:\Users\charl\Desktop\DisplayCalibration\capture-app
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python server.py
-```
+### 2. Run Calibration (Phone + PC)
 
-- PC monitor: URL printed for **`/patterns`** → **F11** fullscreen  
-- Phone (same Wi‑Fi): **`/capture`** or QR from the PC  
-- Result: `capture-app\calibration_result.json` after 15 captures  
+1. Clone or download this repository.
+2. Open a terminal in the `capture-app` folder.
+3. Run the server:
 
-Firewall: allow Python on private networks if the phone cannot connect.
-
----
+   ```bash
+   python -m venv .venv
+   # Windows:
+   .\.venv\Scripts\Activate.ps1
+   # macOS/Linux:
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   python server.py
+-
 
 ## 3. C++ demo (optional)
 
@@ -46,6 +51,73 @@ cmake --build --preset demo-vcpkg
 .\build\demo-vcpkg\demo.exe --token capture-app\calibration_result.json --input your.png
 ```
 
+On your PC monitor:
+Open the URL shown (e.g. http://192.168.x.x:5000/patterns)
+Press F11 for fullscreen
+
+On your phone (same Wi-Fi):
+Open the /capture page (or scan the QR code)
+Align the camera so the monitor fills ~95% of the view
+Tap Start Capture
+
+
+After ~15 captures, you'll get capture-app/calibration_result.json
+3. Run the Demo
+Bash# Windows
+.\demo.exe --token capture-app\calibration_result.json --input your_image.png
+
+# macOS / Linux
+./demo --token capture-app/calibration_result.json --input your_image.png
+Without a token it falls back to standard RGB stripe.
+
+Building from Source (Advanced)
+Prerequisites
+Windows:
+
+Visual Studio Build Tools (Desktop development with C++)
+vcpkg (recommended at C:\vcpkg)
+
+macOS:
+Bashbrew install opencv glew glfw cmake ninja
+Linux:
+Bashsudo apt-get update
+sudo apt-get install -y libopencv-dev libglew-dev libglfw3-dev cmake ninja-build pkg-config
+Build Commands
+Bashcmake --preset demo-vcpkg   # Windows (uses vcpkg)
+# or
+cmake --preset demo         # macOS / Linux (uses system packages)
+
+cmake --build --preset demo-vcpkg --config Release   # Windows
+# or
+cmake --build --preset demo                          # macOS / Linux
+The executable will be in build/demo-vcpkg/Release/demo.exe (Windows) or build/demo (others).
+
+Project Structure
+
+capture-app/ – Python Flask + SocketIO server + calibration pipeline
+src/ – C++ core library (display_calibration)
+shaders/ – GLSL reference shaders (CPU pipeline is the source of truth)
+CMakeLists.txt + presets – Cross-platform build configuration
+
+
+How It Works (Technical Overview)
+
+Capture: PC displays sinusoidal fringes → phone captures 15 images (3 frequencies × 5 phases)
+Processing: Gamma correction, phase shifting, quality-guided unwrapping, quadratic surface fitting, FFT layout detection
+Token: Produces calibration_result.json containing layout, pitch, and subpixel offsets
+Rendering: The C++ pipeline uses the token to compute accurate subpixel coverage, perceptual weights, and edge-aware output
+
+
+Notes
+
+Make sure PC and phone are on the same Wi-Fi network.
+Dim ambient lighting gives best results.
+The demo currently processes the image and prints statistics. You can easily extend main_demo.cpp to save the output image or feed it into your own renderer/shader.
+Firewall: Allow Python on private networks if the phone cannot connect.
+
+
+Contributing / Feedback
+Feel free to open issues or pull requests. This project was built in ~5 months as a solo effort — feedback is very welcome!
 ---
 
 
