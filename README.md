@@ -1,4 +1,45 @@
-#1 DisplayCalibration
+# DisplayCalibration
+
+**Subpixel-aware perceptual rendering + automated calibration toolkit**
+
+This project lets you calibrate the exact subpixel layout of any display (RGB stripe, Pentile, Diamond Pentile, etc.) using only a phone camera, then applies advanced perceptual rendering to improve image quality on that display.
+
+### Features
+- Fully automated structured-light calibration (15 phase-shifted patterns)
+- Phone-based capture with real-time edge detection and cropping
+- High-quality token generation (`calibration_result.json`)
+- C++ rendering pipeline with:
+  - Subpixel coverage computation for multiple layouts
+  - Perceptual luminance weighting + edge modulation
+  - Optional temporal stabilization
+- Cross-platform demo executable (Windows, macOS, Linux)
+- Pre-built binaries available via GitHub Releases
+
+---
+
+## Quick Start (Easiest Way)
+
+### 1. Download Pre-built Demo
+Go to the [Releases page](https://github.com/YOURUSERNAME/DisplayCalibration/releases) and download the latest version for your platform:
+
+- `demo-windows.zip` → `demo.exe`
+- `demo-macos.zip` → `demo` (make executable with `chmod +x demo`)
+- `demo-linux.zip` → `demo`
+
+### 2. Run Calibration (Phone + PC)
+
+1. Clone or download this repository.
+2. Open a terminal in the `capture-app` folder.
+3. Run the server:
+
+   ```bash
+   python -m venv .venv
+   # Windows:
+   .\.venv\Scripts\Activate.ps1
+   # macOS/Linux:
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   python server.py
 
 
 --
