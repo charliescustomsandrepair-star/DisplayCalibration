@@ -29,7 +29,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: demo-windows
-          path: build/Release/demo.exe
+          path: build/Release/
 
   build-macos:
     runs-on: macos-latest
@@ -41,6 +41,8 @@ jobs:
 
       - name: Build
         run: |
+          # Remove "CONFIG" from CMakeLists for macOS system libs
+          sed -i '' 's/REQUIRED CONFIG/REQUIRED/g' CMakeLists.txt
           mkdir build
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release \
@@ -73,9 +75,10 @@ jobs:
 
       - name: Build
         run: |
+          # Remove "CONFIG" requirement so Linux finds the system libraries
+          sed -i 's/REQUIRED CONFIG/REQUIRED/g' CMakeLists.txt
           mkdir build
           cd build
-          # Removed manual GLEW paths so CMake uses the installed dev package automatically
           cmake -DCMAKE_BUILD_TYPE=Release \
                 -DUSE_OPENCV=ON \
                 -DBUILD_DEMO=ON \
@@ -104,6 +107,11 @@ jobs:
         with:
           files: |
             artifacts/demo-windows/demo.exe
+            artifacts/demo-macos/demo
+            artifacts/demo-linux/demo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
             artifacts/demo-macos/demo
             artifacts/demo-linux/demo
         env:
