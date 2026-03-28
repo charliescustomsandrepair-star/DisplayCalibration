@@ -6,93 +6,53 @@ on:
       - 'v*'
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # We use vcpkg on all three to match your CMake's "CONFIG" requirement
+        include:
+          - os: windows-latest
+            triplet: x64-windows
+            artifact_name: demo-windows
+            binary_path: build/Release/demo.exe
+          - os: ubuntu-latest
+            triplet: x64-linux
+            artifact_name: demo-linux
+            binary_path: build/demo
+          - os: macos-latest
+            triplet: x64-osx
+            artifact_name: demo-macos
+            binary_path: build/demo
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: vcpkg install opencv:x64-windows glew:x64-windows glfw3:x64-windows
+      - name: Install Dependencies (vcpkg)
+        run: vcpkg install opencv:${{ matrix.triplet }} glew:${{ matrix.triplet }} glfw3:${{ matrix.triplet }}
 
-      - name: Build
+      - name: Configure CMake
         run: |
           mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release `
-                -DUSE_OPENCV=ON `
-                -DBUILD_DEMO=ON `
-                -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake `
-                -G "Visual Studio 17 2022" ..
-          cmake --build . --config Release
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: demo-windows
-          path: build/Release/
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: brew install opencv glew glfw cmake ninja
+          cmake -S . -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DUSE_OPENCV=ON `
+            -DBUILD_DEMO=ON `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+        shell: pwsh
 
       - name: Build
-        run: |
-          # Remove "CONFIG" from CMakeLists for macOS system libs
-          sed -i '' 's/REQUIRED CONFIG/REQUIRED/g' CMakeLists.txt
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release \
-                -DUSE_OPENCV=ON \
-                -DBUILD_DEMO=ON \
-                -G Ninja ..
-          cmake --build .
+        run: cmake --build build --config Release
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: demo-macos
-          path: build/demo
-
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libopencv-dev \
-            libglew-dev \
-            libglfw3-dev \
-            libgl1-mesa-dev \
-            cmake \
-            ninja-build
-
-      - name: Build
-        run: |
-          # Remove "CONFIG" requirement so Linux finds the system libraries
-          sed -i 's/REQUIRED CONFIG/REQUIRED/g' CMakeLists.txt
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release \
-                -DUSE_OPENCV=ON \
-                -DBUILD_DEMO=ON \
-                -G Ninja ..
-          cmake --build .
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: demo-linux
-          path: build/demo
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.binary_path }}
 
   release:
-    needs: [build-windows, build-macos, build-linux]
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -107,12 +67,6 @@ jobs:
         with:
           files: |
             artifacts/demo-windows/demo.exe
-            artifacts/demo-macos/demo
-            artifacts/demo-linux/demo
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
             artifacts/demo-macos/demo
             artifacts/demo-linux/demo
         env:
