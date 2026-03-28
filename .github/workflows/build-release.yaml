@@ -9,24 +9,19 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Install vcpkg
-        run: |
-          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: C:\vcpkg\vcpkg install opencv:x64-windows glew:x64-windows glfw3:x64-windows
+        run: vcpkg install opencv:x64-windows glew:x64-windows glfw3:x64-windows
 
       - name: Build
         run: |
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Release ^
-                -DUSE_OPENCV=ON ^
-                -DBUILD_DEMO=ON ^
-                -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake ^
+          cmake -DCMAKE_BUILD_TYPE=Release `
+                -DUSE_OPENCV=ON `
+                -DBUILD_DEMO=ON `
+                -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake `
                 -G "Visual Studio 17 2022" ..
           cmake --build . --config Release
 
@@ -39,7 +34,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: brew install opencv glew glfw cmake ninja
@@ -63,7 +58,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -72,6 +67,7 @@ jobs:
             libopencv-dev \
             libglew-dev \
             libglfw3-dev \
+            libgl1-mesa-dev \
             cmake \
             ninja-build
 
@@ -79,11 +75,10 @@ jobs:
         run: |
           mkdir build
           cd build
+          # Removed manual GLEW paths so CMake uses the installed dev package automatically
           cmake -DCMAKE_BUILD_TYPE=Release \
                 -DUSE_OPENCV=ON \
                 -DBUILD_DEMO=ON \
-                -DGLEW_INCLUDE_DIR=/usr/include \
-                -DGLEW_LIBRARY=/usr/lib/x86_64-linux-gnu/libGLEW.so \
                 -G Ninja ..
           cmake --build .
 
@@ -96,16 +91,20 @@ jobs:
   release:
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
-            demo-windows/demo.exe
-            demo-macos/demo
-            demo-linux/demo
+            artifacts/demo-windows/demo.exe
+            artifacts/demo-macos/demo
+            artifacts/demo-linux/demo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
