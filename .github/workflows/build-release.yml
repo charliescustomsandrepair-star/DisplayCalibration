@@ -9,7 +9,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
@@ -30,7 +30,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install dependencies
         run: brew install opencv glew glfw3 cmake ninja
       - name: Build
@@ -47,15 +47,19 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libopencv-dev libglew-dev libglfw3-dev cmake ninja-build
+      - name: Fix GLEW Config
+        run: |
+          sudo mkdir -p /usr/lib/cmake/GLEW
+          sudo ln -s /usr/lib/x86_64-linux-gnu/cmake/glew/glew-config.cmake /usr/lib/cmake/GLEW/GLEWConfig.cmake
       - name: Build
         run: |
           mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DUSE_OPENCV=ON -DBUILD_DEMO=ON -DGLEW_DIR=/usr/lib/x86_64-linux-gnu/cmake/glew -G Ninja ..
+          cmake -DCMAKE_BUILD_TYPE=Release -DUSE_OPENCV=ON -DBUILD_DEMO=ON -DCMAKE_PREFIX_PATH=/usr/lib/cmake/GLEW -G Ninja ..
           cmake --build . --config Release
       - name: Upload artifact
         uses: actions/upload-artifact@v4
