@@ -48,13 +48,11 @@ cmake --build --preset demo-vcpkg
 
 ---
 
-## 4. GitHub
 
-Run `git init` only **inside** `DisplayCalibration`. `.gitignore` already excludes `build/`, `junk/`, captures.
 
 ---
 
-## 5. Notes (optional — edit for yourself)
+
 
 -
 
