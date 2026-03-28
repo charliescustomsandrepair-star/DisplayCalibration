@@ -67,7 +67,25 @@ if(BUILD_DEMO)
         message(WARNING "Demo requires OpenCV. Set USE_OPENCV=ON to build demo.")
     else()
         find_package(OpenGL REQUIRED)
-        find_package(GLEW REQUIRED CONFIG)
+
+        # === GLEW (works on Windows vcpkg, macOS Homebrew, Linux system packages) ===
+        find_package(GLEW QUIET CONFIG)
+
+        if(TARGET GLEW::GLEW)
+            message(STATUS "GLEW found via config (vcpkg or Homebrew)")
+            set(DEMO_GLEW_TARGET GLEW::GLEW)
+        else()
+            message(STATUS "GLEW config not found - using pkg-config fallback (Linux)")
+            find_package(PkgConfig REQUIRED)
+            pkg_check_modules(GLEW REQUIRED glew)
+
+            # Create a consistent imported target so the rest of the code doesn't change
+            add_library(GLEW::GLEW INTERFACE IMPORTED)
+            target_include_directories(GLEW::GLEW INTERFACE ${GLEW_INCLUDE_DIRS})
+            target_link_libraries(GLEW::GLEW INTERFACE ${GLEW_LIBRARIES})
+            set(DEMO_GLEW_TARGET GLEW::GLEW)
+        endif()
+
         find_package(glfw3 REQUIRED CONFIG)
 
         # vcpkg/exported targets can have different names across ports/toolchains.
@@ -78,16 +96,6 @@ if(BUILD_DEMO)
             set(DEMO_OPENGL_TARGET ${OPENGL_gl_LIBRARY})
         else()
             message(FATAL_ERROR "OpenGL target/library not found after find_package(OpenGL).")
-        endif()
-
-        set(DEMO_GLEW_TARGET "")
-        if(TARGET GLEW::GLEW)
-            set(DEMO_GLEW_TARGET GLEW::GLEW)
-        elseif(TARGET GLEW::glew)
-            set(DEMO_GLEW_TARGET GLEW::glew)
-        endif()
-        if(DEMO_GLEW_TARGET STREQUAL "")
-            message(FATAL_ERROR "GLEW imported target not found after find_package(GLEW).")
         endif()
 
         set(DEMO_GLFW_TARGET "")
